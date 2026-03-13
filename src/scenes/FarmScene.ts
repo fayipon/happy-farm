@@ -27,6 +27,10 @@ export class FarmScene extends Phaser.Scene {
   private currentGender: 'male' | 'female' = 'female'
   private petSprite!: Phaser.GameObjects.Sprite
   private currentPet = 'cat'
+  private ytPlayer: YT.Player | null = null
+  private ytReady = false
+  private musicPlaying = false
+  private musicNote: Phaser.GameObjects.Text | null = null
 
   constructor() {
     super('Farm')
@@ -162,6 +166,17 @@ export class FarmScene extends Phaser.Scene {
     this.anims.create({ key: 'pet-pig', frames: this.anims.generateFrameNumbers('pet', { start: 12, end: 15 }), frameRate: 2, repeat: -1 })
     this.petSprite = this.add.sprite(charX + 38, charY + 22, 'pet', 0).setScale(0.22).setDepth(10)
     this.petSprite.play(`pet-${this.currentPet}`)
+    this.petSprite.setInteractive({ useHandCursor: true })
+    this.petSprite.on('pointerdown', () => this.togglePetMusic())
+
+    // Music note indicator above pet
+    this.musicNote = this.add.text(charX + 38, charY - 2, '♫', {
+      fontSize: '18px',
+      color: '#FFD700',
+    }).setOrigin(0.5).setDepth(11).setVisible(false)
+
+    // Init YouTube IFrame API
+    this.initYouTube()
 
     // Listen for gender change from DevTools
     const onGenderChange = (e: Event) => {
@@ -180,6 +195,10 @@ export class FarmScene extends Phaser.Scene {
       if (pet === this.currentPet) return
       this.currentPet = pet
       this.petSprite.play(`pet-${pet}`)
+      // Switch music if playing
+      if (this.musicPlaying && this.ytReady && this.ytPlayer) {
+        this.ytPlayer.loadVideoById(this.getPetVideoId())
+      }
     }
     window.addEventListener('pet-changed', onPetChange)
     this.events.on('destroy', () => window.removeEventListener('pet-changed', onPetChange))
@@ -612,6 +631,82 @@ export class FarmScene extends Phaser.Scene {
       this.seedButtons.forEach(({ highlight, cropIndex }) => {
         highlight.setVisible(cropIndex === 0)
       })
+    }
+  }
+
+  private getPetVideoId(): string {
+    const PET_MUSIC: Record<string, string> = {
+      cat: 'mf2sVtzRAlI',
+      dog: 'XWfHABiB_RY',
+      chicken: 'vN9FhEWBlG4',
+      pig: 'vN9FhEWBlG4',
+    }
+    return PET_MUSIC[this.currentPet] ?? PET_MUSIC.cat
+  }
+
+  private initYouTube() {
+    // Load YouTube IFrame API if not already loaded
+    if (!(window as any).YT) {
+      const tag = document.createElement('script')
+      tag.src = 'https://www.youtube.com/iframe_api'
+      document.head.appendChild(tag)
+    }
+
+    const createPlayer = () => {
+      // Hidden container for YT player
+      let container = document.getElementById('yt-pet-player')
+      if (!container) {
+        container = document.createElement('div')
+        container.id = 'yt-pet-player'
+        container.style.position = 'absolute'
+        container.style.width = '1px'
+        container.style.height = '1px'
+        container.style.overflow = 'hidden'
+        container.style.opacity = '0'
+        container.style.pointerEvents = 'none'
+        document.body.appendChild(container)
+      }
+
+      this.ytPlayer = new YT.Player('yt-pet-player', {
+        height: '1',
+        width: '1',
+        playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, modestbranding: 1 },
+        events: {
+          onReady: () => { this.ytReady = true },
+        },
+      })
+    }
+
+    if ((window as any).YT && (window as any).YT.Player) {
+      createPlayer()
+    } else {
+      (window as any).onYouTubeIframeAPIReady = () => createPlayer()
+    }
+  }
+
+  private togglePetMusic() {
+    if (!this.ytReady || !this.ytPlayer) return
+
+    if (this.musicPlaying) {
+      this.ytPlayer.pauseVideo()
+      this.musicPlaying = false
+      this.musicNote?.setVisible(false)
+    } else {
+      this.ytPlayer.loadVideoById(this.getPetVideoId())
+      this.ytPlayer.playVideo()
+      this.musicPlaying = true
+      this.musicNote?.setVisible(true)
+      // Bounce animation for music note
+      if (this.musicNote) {
+        this.tweens.add({
+          targets: this.musicNote,
+          y: this.musicNote.y - 5,
+          duration: 500,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        })
+      }
     }
   }
 }
