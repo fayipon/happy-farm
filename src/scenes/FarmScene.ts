@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { fetchFarm, plantCrop, waterPlot, harvestPlot, upgradeVip, type FarmData, type Plot } from '../game/api'
+import { fetchFarm, plantCrop, waterPlot, harvestPlot, upgradeVip, type FarmData } from '../game/api'
 
 // Map crop names to spritesheet row index (each row = 3 frames: tier1, tier2, tier3)
 // Frame = row * 3 + (stage - 1)
@@ -9,25 +9,19 @@ const CROP_ROW: Record<string, number> = Object.fromEntries(CROPS.map((c, i) => 
 // Consistent seed scale for all stages
 const SEED_SCALE = 0.17
 
-// Growth thresholds in seconds
-const STAGE_THRESHOLDS = [0, 10, 15] // stage 1->2 at 10s from plantedAt, 2->3 at 15s from wateredAt
-
 export class FarmScene extends Phaser.Scene {
   private plotSprites: { plot: Phaser.GameObjects.Sprite; seed: Phaser.GameObjects.Sprite; timer: Phaser.GameObjects.Text }[] = []
   private goldText!: Phaser.GameObjects.Text
   private vipText!: Phaser.GameObjects.Text
   private farmData!: FarmData
-  private selectedAction: 'plant' | 'water' | 'harvest' | null = null
   private selectedCrop = 'carrot'
   private seedButtons: { sprite: Phaser.GameObjects.Sprite; highlight: Phaser.GameObjects.Graphics; lock: Phaser.GameObjects.Text; cropIndex: number }[] = []
-  private pollTimer?: Phaser.Time.TimerEvent
-  private countdownTimer?: Phaser.Time.TimerEvent
   private nextRefreshTimeout?: number
   private characterSprite!: Phaser.GameObjects.Sprite
   private currentGender: 'male' | 'female' = 'female'
   private petSprite!: Phaser.GameObjects.Sprite
   private currentPet = 'cat'
-  private ytPlayer: YT.Player | null = null
+  private ytPlayer: any = null
   private ytReady = false
   private musicPlaying = false
   private musicNote: Phaser.GameObjects.Text | null = null
@@ -41,7 +35,7 @@ export class FarmScene extends Phaser.Scene {
     try {
       this.farmData = await fetchFarm()
     } catch {
-      this.farmData = { coins: 5000, plots: Array.from({ length: 16 }, (_, i) => ({ id: i + 1, crop: null, stage: 0 })) }
+      this.farmData = { coins: 5000, vipLevel: 1, plots: Array.from({ length: 16 }, (_, i) => ({ id: i + 1, crop: null, stage: 0, locked: i >= 2 })) }
     }
 
     const bg = this.add.image(0, 0, 'bg').setOrigin(0, 0)
@@ -207,7 +201,7 @@ export class FarmScene extends Phaser.Scene {
     this.scheduleNextRefresh()
 
     // Update countdown text every second (client-side)
-    this.countdownTimer = this.time.addEvent({
+    this.time.addEvent({
       delay: 1000,
       loop: true,
       callback: () => this.updateCountdowns(),
@@ -288,8 +282,6 @@ export class FarmScene extends Phaser.Scene {
     const seedScale = 0.13
     const seedSpacing = this.scale.width / (cols + 1)
     this.seedButtons = []
-
-    const VIP_CROP_COUNT = [1, 2, 4, 6, 8]
 
     CROPS.forEach((crop, i) => {
       const col = i % cols
@@ -667,7 +659,7 @@ export class FarmScene extends Phaser.Scene {
         document.body.appendChild(container)
       }
 
-      this.ytPlayer = new YT.Player('yt-pet-player', {
+      this.ytPlayer = new (window as any).YT.Player('yt-pet-player', {
         height: '1',
         width: '1',
         playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, modestbranding: 1 },

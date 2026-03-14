@@ -24,8 +24,8 @@ func main() {
 	// Apply middleware
 	wrapped := middleware.Logger(middleware.CORS(mux))
 
-	log.Println("Server starting on :8080")
-	if err := http.ListenAndServe(":8080", wrapped); err != nil {
+	log.Println("Server starting on :8083")
+	if err := http.ListenAndServe(":8083", wrapped); err != nil {
 		log.Fatal(err)
 	}
 }

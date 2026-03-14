@@ -28,7 +28,7 @@ happy-farm/
 │       ├── BootScene.ts     # 資源載入場景 (含色鍵處理)
 │       └── FarmScene.ts     # 農場主場景 (4×4 等距農田)
 └── server/                  # 後端 (Go API Server)
-    ├── main.go              # 入口，路由設定，監聽 :8080
+    ├── main.go              # 入口，路由設定，監聽 :8083
     ├── go.mod
     ├── handler/
     │   └── handler.go       # API handlers
@@ -58,9 +58,9 @@ cd server
 go run .
 ```
 
-API Server 預設啟動於 `http://localhost:8080`
+API Server 預設啟動於 `http://localhost:8083`
 
-> Vite 開發代理已設定 `/api` → `http://localhost:8080`
+> Vite 開發代理已設定 `/api` → `http://localhost:8083`
 
 ## 遊戲玩法
 
