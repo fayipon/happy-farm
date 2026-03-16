@@ -33,7 +33,7 @@ export class FarmScene extends Phaser.Scene {
     try {
       this.farmData = await fetchFarm()
     } catch {
-      this.farmData = { coins: 5000, vipLevel: 1, plots: Array.from({ length: 16 }, (_, i) => ({ id: i + 1, crop: null, stage: 0, locked: i >= 2 })) }
+      this.farmData = { username: 'Player', coins: 5000, vipLevel: 1, pet: null, plots: Array.from({ length: 16 }, (_, i) => ({ id: i + 1, crop: null, stage: 0, locked: i >= 2 })) }
     }
     try {
       this.seedsData = await fetchSeeds()
@@ -210,7 +210,7 @@ export class FarmScene extends Phaser.Scene {
       .setOrigin(0.5, 0.25)
       .setDepth(9)
       .setScrollFactor(0)
-    const maskGfx = this.make.graphics({ add: false })
+    const maskGfx = this.make.graphics()
     maskGfx.fillCircle(circleX, circleY, circleR)
     this.avatarSprite.setMask(maskGfx.createGeometryMask())
 
