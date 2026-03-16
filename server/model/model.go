@@ -41,9 +41,11 @@ type Plot struct {
 
 // FarmResponse is the GET /api/farm response.
 type FarmResponse struct {
-	Coins    int    `json:"coins"`
-	VipLevel int    `json:"vipLevel"`
-	Plots    []Plot `json:"plots"`
+	Username string  `json:"username"`
+	Coins    int     `json:"coins"`
+	VipLevel int     `json:"vipLevel"`
+	Pet      *string `json:"pet"`
+	Plots    []Plot  `json:"plots"`
 }
 
 // PlantRequest is the POST /api/plant request body.

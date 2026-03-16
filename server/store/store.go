@@ -10,9 +10,11 @@ import (
 const plotCount = 16
 
 var (
-	mu    sync.RWMutex
+	mu       sync.RWMutex
+	username = "Player"
 	coins    = 5000
 	vipLevel = 1
+	pet      *string
 	plots    [plotCount]model.Plot
 )
 
@@ -84,7 +86,7 @@ func GetFarm() model.FarmResponse {
 		}
 		snap[i].Locked = !unlocked[p.ID]
 	}
-	return model.FarmResponse{Coins: coins, VipLevel: vipLevel, Plots: snap}
+	return model.FarmResponse{Username: username, Coins: coins, VipLevel: vipLevel, Pet: pet, Plots: snap}
 }
 
 // Plant puts a crop into an empty plot (stage -> 1).

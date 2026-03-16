@@ -12,7 +12,8 @@ const SEED_SCALE = 0.17
 export class FarmScene extends Phaser.Scene {
   private plotSprites: { plot: Phaser.GameObjects.Sprite; seed: Phaser.GameObjects.Sprite; timer: Phaser.GameObjects.Text }[] = []
   private goldText!: Phaser.GameObjects.Text
-  private vipText!: Phaser.GameObjects.Text
+  private vipBadgeText!: Phaser.GameObjects.Text
+  private avatarSprite!: Phaser.GameObjects.Sprite
   private farmData!: FarmData
   private selectedCrop = 'carrot'
   private seedButtons: { sprite: Phaser.GameObjects.Sprite; highlight: Phaser.GameObjects.Graphics; lock: Phaser.GameObjects.Text; cropIndex: number }[] = []
@@ -119,15 +120,15 @@ export class FarmScene extends Phaser.Scene {
         seedSprite.setDepth(depth + 0.5)
         seedSprite.setVisible(false)
 
-        const timerText = this.add.text(isoX, isoY + 18, '', {
-          fontSize: '14px',
+        const timerText = this.add.text(isoX + 14, isoY + 8, '', {
+          fontSize: '9px',
           fontFamily: 'Arial, sans-serif',
           fontStyle: 'bold',
           color: '#FFFFFF',
-          stroke: '#000000',
-          strokeThickness: 4,
+          stroke: '#4A3520',
+          strokeThickness: 2,
           align: 'center',
-        }).setOrigin(0.5, 0).setDepth(depth + 8).setVisible(false)
+        }).setOrigin(0.5, 0).setDepth(depth + 8).setVisible(false).setRotation(-0.55)
 
         // Make plots interactive with diamond-shaped hit area
         const plotData = this.farmData.plots[plotIndex]
@@ -179,6 +180,9 @@ export class FarmScene extends Phaser.Scene {
       this.currentGender = gender
       this.characterSprite.setTexture(gender, 0)
       this.characterSprite.play(`${gender}-walk-down`)
+      if (this.avatarSprite) {
+        this.avatarSprite.setTexture(gender, 0)
+      }
     }
     window.addEventListener('gender-changed', onGenderChange)
     this.events.on('destroy', () => window.removeEventListener('gender-changed', onGenderChange))
@@ -207,19 +211,62 @@ export class FarmScene extends Phaser.Scene {
       callback: () => this.updateCountdowns(),
     })
 
-    // HUD — Gold (top-left)
-    const goldBg = this.add.image(80, 30, 'gold')
-    goldBg.setScale(0.3)
-    goldBg.setDepth(10)
-    goldBg.setScrollFactor(0)
+    // HUD — Avatar Bar (top-left)
+    const AVATAR_SCALE = 0.16
 
-    this.goldText = this.add.text(62, 13, this.formatCoins(this.farmData.coins), {
-      fontSize: '20px',
+    // Character avatar in the circle (rendered below the bar frame)
+    const circleX = 55
+    const circleY = 52
+    const circleR = 24
+    this.avatarSprite = this.add.sprite(circleX, circleY, this.currentGender, 0)
+      .setScale(0.35)
+      .setOrigin(0.5, 0.25)
+      .setDepth(9)
+      .setScrollFactor(0)
+    const maskGfx = this.make.graphics({ add: false })
+    maskGfx.fillCircle(circleX, circleY, circleR)
+    this.avatarSprite.setMask(maskGfx.createGeometryMask())
+
+    // Avatar bar frame (on top of character)
+    this.add.image(3, -10, 'avatar-bar').setOrigin(0, 0).setScale(AVATAR_SCALE).setDepth(10).setScrollFactor(0)
+
+    // VIP level badge on shield
+    this.vipBadgeText = this.add.text(80, 32, `${this.farmData.vipLevel}`, {
+      fontSize: '14px',
+      fontFamily: 'Georgia, serif',
+      fontStyle: 'bold',
+      color: '#FFFFFF',
+      stroke: '#333366',
+      strokeThickness: 2,
+    }).setOrigin(0.5).setDepth(12).setScrollFactor(0)
+
+    // Username (top of bar) — left aligned
+    const textLeft = 100
+    this.add.text(textLeft, 40, this.farmData.username || 'Player', {
+      fontSize: '14px',
       fontFamily: 'Georgia, serif',
       fontStyle: 'bold',
       color: '#FFFFFF',
       stroke: '#8B6B4A',
-      strokeThickness: 3,
+      strokeThickness: 2,
+      shadow: {
+        offsetX: 1,
+        offsetY: 1,
+        color: '#5C3D1A',
+        blur: 2,
+        fill: false,
+        stroke: true,
+      },
+    }).setOrigin(0, 0.5).setDepth(11).setScrollFactor(0)
+
+    // Gold coins (bottom of bar) — left aligned
+    this.goldText = this.add.text(textLeft, 58, this.formatCoins(this.farmData.coins), {
+      fontSize: '14px',
+      fontFamily: 'Georgia, serif',
+      fontStyle: 'bold',
+      color: '#FFD700',
+      stroke: '#8B6B4A',
+      strokeThickness: 2,
       shadow: {
         offsetX: 1,
         offsetY: 2,
@@ -228,7 +275,7 @@ export class FarmScene extends Phaser.Scene {
         fill: false,
         stroke: true,
       },
-    }).setDepth(11).setScrollFactor(0).setOrigin(0, 0)
+    }).setDepth(11).setScrollFactor(0).setOrigin(0, 0.5)
 
     // Listen for external updates (e.g. DevTools actions)
     const onExternalUpdate = async () => {
@@ -241,17 +288,9 @@ export class FarmScene extends Phaser.Scene {
     window.addEventListener('devtools-updated', onExternalUpdate)
     this.events.on('destroy', () => window.removeEventListener('devtools-updated', onExternalUpdate))
 
-    // HUD — VIP Level (top-right)
-    this.vipText = this.add.text(this.scale.width - 10, 10, `VIP ${this.farmData.vipLevel}`, {
-      fontSize: '16px',
-      fontFamily: 'Arial, sans-serif',
-      fontStyle: 'bold',
-      color: '#FFD700',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setDepth(11).setScrollFactor(0).setOrigin(1, 0).setInteractive({ useHandCursor: true })
-
-    this.vipText.on('pointerdown', async () => {
+    // VIP badge is clickable to upgrade
+    this.vipBadgeText.setInteractive({ useHandCursor: true })
+    this.vipBadgeText.on('pointerdown', async () => {
       try {
         const data = await upgradeVip()
         this.farmData = data
@@ -264,6 +303,58 @@ export class FarmScene extends Phaser.Scene {
 
     // Bottom UI — semi-transparent black background bar (seed picker)
     const barHeight = 140
+
+    // Rule icon (top-right floating)
+    const ruleIcon = this.add.image(this.scale.width - 30, 45, 'rule-icon')
+      .setScale(0.045)
+      .setDepth(10)
+      .setScrollFactor(0)
+      .setInteractive({ useHandCursor: true })
+
+    // Rule detail popup (hidden by default)
+    const overlay = this.add.rectangle(
+      this.scale.width / 2, this.scale.height / 2,
+      this.scale.width, this.scale.height,
+      0x000000, 0.6
+    ).setDepth(50).setScrollFactor(0).setVisible(false).setInteractive()
+
+    const ruleDetail = this.add.image(this.scale.width / 2, this.scale.height / 2, 'rule-detail')
+      .setScale(Math.min((this.scale.width - 40) / 1024, (this.scale.height - 80) / 1024))
+      .setDepth(51)
+      .setScrollFactor(0)
+      .setVisible(false)
+
+    const ruleText = this.add.text(this.scale.width / 2, this.scale.height / 2 + 25, [
+      '1. Plant crops on empty fields.',
+      '2. Water crops to help growth.',
+      '3. Harvest when crops are ready.',
+      '4. Earn coins from every harvest.',
+      '5. Unlock more land and expand',
+      '    your farm.',
+      '',
+      'Plant crops and collect rewards!',
+    ].join('\n'), {
+      fontSize: '14px',
+      fontFamily: 'Georgia, serif',
+      fontStyle: 'bold',
+      color: '#5C3D1A',
+      lineSpacing: 6,
+      align: 'left',
+      wordWrap: { width: 270 },
+    }).setOrigin(0.5).setDepth(52).setScrollFactor(0).setVisible(false)
+
+    ruleIcon.on('pointerdown', () => {
+      overlay.setVisible(true)
+      ruleDetail.setVisible(true)
+      ruleText.setVisible(true)
+    })
+
+    overlay.on('pointerdown', () => {
+      overlay.setVisible(false)
+      ruleDetail.setVisible(false)
+      ruleText.setVisible(false)
+    })
+
     const bar = this.add.rectangle(
       this.scale.width / 2,
       this.scale.height - barHeight / 2,
@@ -414,8 +505,8 @@ export class FarmScene extends Phaser.Scene {
     if (this.goldText) {
       this.goldText.setText(this.formatCoins(this.farmData.coins))
     }
-    if (this.vipText) {
-      this.vipText.setText(`VIP ${this.farmData.vipLevel}`)
+    if (this.vipBadgeText) {
+      this.vipBadgeText.setText(`${this.farmData.vipLevel}`)
     }
 
     this.updateCropLocks()
@@ -436,7 +527,10 @@ export class FarmScene extends Phaser.Scene {
         // Countdown to tier 2
         const remaining = Math.max(0, 10 - (now - plot.plantedAt))
         if (remaining <= 0) { timer.setVisible(false); return }
-        timer.setText(`${remaining}s`)
+        const h = Math.floor(remaining / 3600)
+        const m = Math.floor((remaining % 3600) / 60)
+        const s = remaining % 60
+        timer.setText(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`)
         timer.setVisible(true)
       } else if (plot.stage === 2 && !plot.wateredAt) {
         // Paused — needs water
@@ -446,7 +540,10 @@ export class FarmScene extends Phaser.Scene {
         // Countdown to tier 3
         const remaining = Math.max(0, 15 - (now - plot.wateredAt))
         if (remaining <= 0) { timer.setVisible(false); return }
-        timer.setText(`${remaining}s`)
+        const h = Math.floor(remaining / 3600)
+        const m = Math.floor((remaining % 3600) / 60)
+        const s = remaining % 60
+        timer.setText(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`)
         timer.setVisible(true)
       } else {
         timer.setVisible(false)
@@ -557,8 +654,8 @@ export class FarmScene extends Phaser.Scene {
 
     this.tweens.add({
       targets: flyText,
-      x: 80,
-      y: 30,
+      x: this.goldText?.x ?? 148,
+      y: this.goldText?.y ?? 62,
       scale: 0.6,
       duration: 600,
       delay: 150,
@@ -576,25 +673,6 @@ export class FarmScene extends Phaser.Scene {
           })
         }
       },
-    })
-
-    // ④ "+100" floating text
-    const plusText = this.add.text(x, y - 10, '+100', {
-      fontSize: '16px',
-      fontFamily: 'Arial, sans-serif',
-      fontStyle: 'bold',
-      color: '#FFD700',
-      stroke: '#000000',
-      strokeThickness: 3,
-    }).setOrigin(0.5).setDepth(21)
-
-    this.tweens.add({
-      targets: plusText,
-      y: y - 45,
-      alpha: 0,
-      duration: 800,
-      ease: 'Quad.easeOut',
-      onComplete: () => plusText.destroy(),
     })
   }
 

@@ -5,6 +5,9 @@ import sunImg from '../assets/items/sun.png'
 import cloudImg from '../assets/items/cloud.png'
 import goldImg from '../assets/ui/gold.png'
 import uiImg from '../assets/ui/ui.png'
+import avatarBarImg from '../assets/ui/avatar.png'
+import ruleImg from '../assets/ui/rule.png'
+import ruleDetailImg from '../assets/ui/rule_detail.png'
 import seedImg from '../assets/crops/seed2.jpg'
 import femaleImg from '../assets/characters/female.jpg'
 import maleImg from '../assets/characters/male.jpg'
@@ -37,6 +40,9 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 111,
     })
     this.load.image('gold', goldImg)
+    this.load.image('avatar-bar', avatarBarImg)
+    this.load.image('rule-icon', ruleImg)
+    this.load.image('rule-detail', ruleDetailImg)
     this.load.spritesheet('ui', uiImg, {
       frameWidth: 166,
       frameHeight: 166,

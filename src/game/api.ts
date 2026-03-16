@@ -8,8 +8,10 @@ export interface Plot {
 }
 
 export interface FarmData {
+  username: string
   coins: number
   vipLevel: number
+  pet: string | null
   plots: Plot[]
 }
 
