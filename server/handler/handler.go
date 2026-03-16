@@ -74,18 +74,14 @@ func Harvest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, store.GetFarm())
 }
 
+// GET /api/seeds — returns seed inventory
+func GetSeeds(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, store.GetSeeds())
+}
+
 // POST /api/clear — remove all crops from every plot
 func Clear(w http.ResponseWriter, r *http.Request) {
 	store.Clear()
-	writeJSON(w, http.StatusOK, store.GetFarm())
-}
-
-// POST /api/upgrade-vip — upgrade VIP level (costs coins)
-func UpgradeVip(w http.ResponseWriter, r *http.Request) {
-	if msg, ok := store.UpgradeVip(); !ok {
-		errJSON(w, http.StatusConflict, msg)
-		return
-	}
 	writeJSON(w, http.StatusOK, store.GetFarm())
 }
 

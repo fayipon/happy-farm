@@ -16,6 +16,16 @@ var (
 	vipLevel = 1
 	pet      *string
 	plots    [plotCount]model.Plot
+	seeds    = map[model.CropType]int{
+		model.CropCarrot:  99,
+		model.CropTomato:  99,
+		model.CropCorn:    99,
+		model.CropPumpkin: 99,
+		model.CropCabbage: 99,
+		model.CropRadish:  99,
+		model.CropWheat:   99,
+		model.CropBerry:   99,
+	}
 )
 
 // UnlockOrder defines which plot IDs unlock at each VIP level (row by row).
@@ -122,12 +132,27 @@ func Plant(plotID int, crop model.CropType) (string, bool) {
 	if plots[i].Crop != nil {
 		return "plot is not empty", false
 	}
+	if seeds[crop] <= 0 {
+		return "no seeds left", false
+	}
 	now := time.Now().Unix()
 	plots[i].Crop = &crop
 	plots[i].Stage = 1
 	plots[i].PlantedAt = &now
 	plots[i].WateredAt = nil
+	seeds[crop]--
 	return "", true
+}
+
+// GetSeeds returns the current seed inventory.
+func GetSeeds() model.SeedsResponse {
+	mu.RLock()
+	defer mu.RUnlock()
+	snap := make(model.SeedsResponse, len(seeds))
+	for k, v := range seeds {
+		snap["seed_"+string(k)] = v
+	}
+	return snap
 }
 
 // Water resumes growth at tier 2. Only works when crop is at tier 2 and not yet watered.
@@ -190,25 +215,6 @@ func Clear() {
 		plots[i].PlantedAt = nil
 		plots[i].WateredAt = nil
 	}
-}
-
-// VipUpgradeCost returns the coin cost to upgrade to the next VIP level.
-var VipUpgradeCost = []int{0, 500, 1000, 2000, 5000} // cost to go from level 1→2, 2→3, 3→4, 4→5
-
-// UpgradeVip upgrades VIP level if player has enough coins.
-func UpgradeVip() (string, bool) {
-	mu.Lock()
-	defer mu.Unlock()
-	if vipLevel >= 5 {
-		return "already max VIP level", false
-	}
-	cost := VipUpgradeCost[vipLevel-1]
-	if coins < cost {
-		return "not enough coins", false
-	}
-	coins -= cost
-	vipLevel++
-	return "", true
 }
 
 // SetVip forcefully sets VIP level (for dev/debug use).

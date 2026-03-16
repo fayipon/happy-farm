@@ -64,4 +64,7 @@ type HarvestRequest struct {
 	PlotID int `json:"plotId"`
 }
 
+// SeedsResponse is the GET /api/seeds response — seed count per crop type.
+type SeedsResponse map[string]int
+
 // ClearRequest is kept for compatibility but POST /api/clear takes no body.

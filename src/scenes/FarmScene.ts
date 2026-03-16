@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import { fetchFarm, plantCrop, waterPlot, harvestPlot, upgradeVip, type FarmData } from '../game/api'
+import { fetchFarm, fetchSeeds, plantCrop, waterPlot, harvestPlot, type FarmData, type SeedsData } from '../game/api'
 
 // Map crop names to spritesheet row index (each row = 3 frames: tier1, tier2, tier3)
 // Frame = row * 3 + (stage - 1)
@@ -16,16 +16,13 @@ export class FarmScene extends Phaser.Scene {
   private avatarSprite!: Phaser.GameObjects.Sprite
   private farmData!: FarmData
   private selectedCrop = 'carrot'
-  private seedButtons: { sprite: Phaser.GameObjects.Sprite; highlight: Phaser.GameObjects.Graphics; lock: Phaser.GameObjects.Text; cropIndex: number }[] = []
+  private seedButtons: { sprite: Phaser.GameObjects.Sprite; highlight: Phaser.GameObjects.Graphics; lock: Phaser.GameObjects.Text; countText: Phaser.GameObjects.Text; cropIndex: number }[] = []
+  private seedsData: SeedsData = {}
   private nextRefreshTimeout?: number
   private characterSprite!: Phaser.GameObjects.Sprite
   private currentGender: 'male' | 'female' = 'female'
   private petSprite!: Phaser.GameObjects.Sprite
   private currentPet = 'cat'
-  private ytPlayer: any = null
-  private ytReady = false
-  private musicPlaying = false
-  private musicNote: Phaser.GameObjects.Text | null = null
 
   constructor() {
     super('Farm')
@@ -37,6 +34,11 @@ export class FarmScene extends Phaser.Scene {
       this.farmData = await fetchFarm()
     } catch {
       this.farmData = { coins: 5000, vipLevel: 1, plots: Array.from({ length: 16 }, (_, i) => ({ id: i + 1, crop: null, stage: 0, locked: i >= 2 })) }
+    }
+    try {
+      this.seedsData = await fetchSeeds()
+    } catch {
+      this.seedsData = {}
     }
 
     const bg = this.add.image(0, 0, 'bg').setOrigin(0, 0)
@@ -161,17 +163,6 @@ export class FarmScene extends Phaser.Scene {
     this.anims.create({ key: 'pet-pig', frames: this.anims.generateFrameNumbers('pet', { start: 12, end: 15 }), frameRate: 2, repeat: -1 })
     this.petSprite = this.add.sprite(charX + 38, charY + 22, 'pet', 0).setScale(0.22).setDepth(10)
     this.petSprite.play(`pet-${this.currentPet}`)
-    this.petSprite.setInteractive({ useHandCursor: true })
-    this.petSprite.on('pointerdown', () => this.togglePetMusic())
-
-    // Music note indicator above pet
-    this.musicNote = this.add.text(charX + 38, charY - 2, '♫', {
-      fontSize: '18px',
-      color: '#FFD700',
-    }).setOrigin(0.5).setDepth(11).setVisible(false)
-
-    // Init YouTube IFrame API
-    this.initYouTube()
 
     // Listen for gender change from DevTools
     const onGenderChange = (e: Event) => {
@@ -193,10 +184,6 @@ export class FarmScene extends Phaser.Scene {
       if (pet === this.currentPet) return
       this.currentPet = pet
       this.petSprite.play(`pet-${pet}`)
-      // Switch music if playing
-      if (this.musicPlaying && this.ytReady && this.ytPlayer) {
-        this.ytPlayer.loadVideoById(this.getPetVideoId())
-      }
     }
     window.addEventListener('pet-changed', onPetChange)
     this.events.on('destroy', () => window.removeEventListener('pet-changed', onPetChange))
@@ -281,25 +268,13 @@ export class FarmScene extends Phaser.Scene {
     const onExternalUpdate = async () => {
       try {
         this.farmData = await fetchFarm()
+        this.seedsData = await fetchSeeds()
         this.renderPlots()
         this.scheduleNextRefresh()
       } catch { /* ignore */ }
     }
     window.addEventListener('devtools-updated', onExternalUpdate)
     this.events.on('destroy', () => window.removeEventListener('devtools-updated', onExternalUpdate))
-
-    // VIP badge is clickable to upgrade
-    this.vipBadgeText.setInteractive({ useHandCursor: true })
-    this.vipBadgeText.on('pointerdown', async () => {
-      try {
-        const data = await upgradeVip()
-        this.farmData = data
-        this.renderPlots()
-        window.dispatchEvent(new CustomEvent('farm-updated'))
-      } catch (err) {
-        console.error('VIP upgrade failed:', err)
-      }
-    })
 
     // Bottom UI — semi-transparent black background bar (seed picker)
     const barHeight = 140
@@ -403,6 +378,16 @@ export class FarmScene extends Phaser.Scene {
         fontSize: '16px',
       }).setOrigin(0.5).setDepth(10.5).setScrollFactor(0).setVisible(false)
 
+      // Seed count label
+      const countText = this.add.text(x + 18, y + 18, '', {
+        fontSize: '12px',
+        fontFamily: 'Arial, sans-serif',
+        fontStyle: 'bold',
+        color: '#FFFFFF',
+        stroke: '#000000',
+        strokeThickness: 2,
+      }).setOrigin(0.5).setDepth(10.5).setScrollFactor(0)
+
       btn.on('pointerover', () => {
         if (!btn.getData('locked')) btn.setScale(seedScale * 1.2)
       })
@@ -414,7 +399,7 @@ export class FarmScene extends Phaser.Scene {
         this.selectedCrop = crop
       })
 
-      this.seedButtons.push({ sprite: btn, highlight, lock, cropIndex: i })
+      this.seedButtons.push({ sprite: btn, highlight, lock, countText, cropIndex: i })
     })
 
     // Initial crop lock state
@@ -591,6 +576,10 @@ export class FarmScene extends Phaser.Scene {
       }
       this.farmData = data
 
+      if (action === 'plant') {
+        this.seedsData = await fetchSeeds()
+      }
+
       if (action === 'harvest') {
         this.playHarvestAnimation(harvestX, harvestY)
       }
@@ -681,16 +670,21 @@ export class FarmScene extends Phaser.Scene {
     const vip = this.farmData.vipLevel
     const unlocked = vip >= 1 && vip <= 5 ? VIP_CROP_COUNT[vip - 1] : 0
 
-    this.seedButtons.forEach(({ sprite, highlight, lock, cropIndex }) => {
+    this.seedButtons.forEach(({ sprite, highlight, lock, countText, cropIndex }) => {
       const isLocked = cropIndex >= unlocked
       sprite.setData('locked', isLocked)
+      const crop = CROPS[cropIndex]
+      const count = this.seedsData[`seed_${crop}`] ?? 0
+      countText.setText(`${count}`)
       if (isLocked) {
         sprite.setTint(0x555555)
         highlight.setVisible(false)
         lock.setVisible(true)
+        countText.setVisible(false)
       } else {
         sprite.clearTint()
         lock.setVisible(false)
+        countText.setVisible(true)
       }
     })
 
@@ -701,82 +695,6 @@ export class FarmScene extends Phaser.Scene {
       this.seedButtons.forEach(({ highlight, cropIndex }) => {
         highlight.setVisible(cropIndex === 0)
       })
-    }
-  }
-
-  private getPetVideoId(): string {
-    const PET_MUSIC: Record<string, string> = {
-      cat: 'mf2sVtzRAlI',
-      dog: 'XWfHABiB_RY',
-      chicken: 'vN9FhEWBlG4',
-      pig: 'vN9FhEWBlG4',
-    }
-    return PET_MUSIC[this.currentPet] ?? PET_MUSIC.cat
-  }
-
-  private initYouTube() {
-    // Load YouTube IFrame API if not already loaded
-    if (!(window as any).YT) {
-      const tag = document.createElement('script')
-      tag.src = 'https://www.youtube.com/iframe_api'
-      document.head.appendChild(tag)
-    }
-
-    const createPlayer = () => {
-      // Hidden container for YT player
-      let container = document.getElementById('yt-pet-player')
-      if (!container) {
-        container = document.createElement('div')
-        container.id = 'yt-pet-player'
-        container.style.position = 'absolute'
-        container.style.width = '1px'
-        container.style.height = '1px'
-        container.style.overflow = 'hidden'
-        container.style.opacity = '0'
-        container.style.pointerEvents = 'none'
-        document.body.appendChild(container)
-      }
-
-      this.ytPlayer = new (window as any).YT.Player('yt-pet-player', {
-        height: '1',
-        width: '1',
-        playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, modestbranding: 1 },
-        events: {
-          onReady: () => { this.ytReady = true },
-        },
-      })
-    }
-
-    if ((window as any).YT && (window as any).YT.Player) {
-      createPlayer()
-    } else {
-      (window as any).onYouTubeIframeAPIReady = () => createPlayer()
-    }
-  }
-
-  private togglePetMusic() {
-    if (!this.ytReady || !this.ytPlayer) return
-
-    if (this.musicPlaying) {
-      this.ytPlayer.pauseVideo()
-      this.musicPlaying = false
-      this.musicNote?.setVisible(false)
-    } else {
-      this.ytPlayer.loadVideoById(this.getPetVideoId())
-      this.ytPlayer.playVideo()
-      this.musicPlaying = true
-      this.musicNote?.setVisible(true)
-      // Bounce animation for music note
-      if (this.musicNote) {
-        this.tweens.add({
-          targets: this.musicNote,
-          y: this.musicNote.y - 5,
-          duration: 500,
-          yoyo: true,
-          repeat: -1,
-          ease: 'Sine.easeInOut',
-        })
-      }
     }
   }
 }

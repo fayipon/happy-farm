@@ -15,10 +15,10 @@ export interface FarmData {
   plots: Plot[]
 }
 
-const API_BASE = '/api'
+const API_BASE = '/api/farm'
 
 export async function fetchFarm(): Promise<FarmData> {
-  const res = await fetch(`${API_BASE}/farm`)
+  const res = await fetch(`${API_BASE}`)
   if (!res.ok) throw new Error(`GET /api/farm failed: ${res.status}`)
   return res.json()
 }
@@ -29,7 +29,7 @@ export async function plantCrop(plotId: number, crop: string): Promise<FarmData>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ plotId, crop }),
   })
-  if (!res.ok) throw new Error(`POST /api/plant failed: ${res.status}`)
+  if (!res.ok) throw new Error(`POST /api/farm/plant failed: ${res.status}`)
   return res.json()
 }
 
@@ -39,7 +39,7 @@ export async function waterPlot(plotId: number): Promise<FarmData> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ plotId }),
   })
-  if (!res.ok) throw new Error(`POST /api/water failed: ${res.status}`)
+  if (!res.ok) throw new Error(`POST /api/farm/water failed: ${res.status}`)
   return res.json()
 }
 
@@ -49,7 +49,7 @@ export async function harvestPlot(plotId: number): Promise<FarmData> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ plotId }),
   })
-  if (!res.ok) throw new Error(`POST /api/harvest failed: ${res.status}`)
+  if (!res.ok) throw new Error(`POST /api/farm/harvest failed: ${res.status}`)
   return res.json()
 }
 
@@ -57,15 +57,15 @@ export async function clearAll(): Promise<FarmData> {
   const res = await fetch(`${API_BASE}/clear`, {
     method: 'POST',
   })
-  if (!res.ok) throw new Error(`POST /api/clear failed: ${res.status}`)
+  if (!res.ok) throw new Error(`POST /api/farm/clear failed: ${res.status}`)
   return res.json()
 }
 
-export async function upgradeVip(): Promise<FarmData> {
-  const res = await fetch(`${API_BASE}/upgrade-vip`, {
-    method: 'POST',
-  })
-  if (!res.ok) throw new Error(`POST /api/upgrade-vip failed: ${res.status}`)
+export type SeedsData = Record<string, number>
+
+export async function fetchSeeds(): Promise<SeedsData> {
+  const res = await fetch(`${API_BASE}/seeds`)
+  if (!res.ok) throw new Error(`GET /api/farm/seeds failed: ${res.status}`)
   return res.json()
 }
 
@@ -75,6 +75,6 @@ export async function setVip(level: number): Promise<FarmData> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ level }),
   })
-  if (!res.ok) throw new Error(`POST /api/set-vip failed: ${res.status}`)
+  if (!res.ok) throw new Error(`POST /api/farm/set-vip failed: ${res.status}`)
   return res.json()
 }

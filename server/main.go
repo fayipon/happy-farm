@@ -14,12 +14,12 @@ func main() {
 	// API routes
 	mux.HandleFunc("GET /api/health", handler.Health)
 	mux.HandleFunc("GET /api/farm", handler.GetFarm)
-	mux.HandleFunc("POST /api/plant", handler.Plant)
-	mux.HandleFunc("POST /api/water", handler.Water)
-	mux.HandleFunc("POST /api/harvest", handler.Harvest)
-	mux.HandleFunc("POST /api/clear", handler.Clear)
-	mux.HandleFunc("POST /api/upgrade-vip", handler.UpgradeVip)
-	mux.HandleFunc("POST /api/set-vip", handler.SetVip)
+	mux.HandleFunc("GET /api/farm/seeds", handler.GetSeeds)
+	mux.HandleFunc("POST /api/farm/plant", handler.Plant)
+	mux.HandleFunc("POST /api/farm/water", handler.Water)
+	mux.HandleFunc("POST /api/farm/harvest", handler.Harvest)
+	mux.HandleFunc("POST /api/farm/clear", handler.Clear)
+	mux.HandleFunc("POST /api/farm/set-vip", handler.SetVip)
 
 	// Apply middleware
 	wrapped := middleware.Logger(middleware.CORS(mux))
