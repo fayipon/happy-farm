@@ -1,10 +1,44 @@
 import Phaser from 'phaser'
-import { fetchFarm, fetchSeeds, plantCrop, waterPlot, harvestPlot, type FarmData, type SeedsData } from '../game/api'
+import { fetchFarm, fetchSeeds, plantCrop, waterPlot, harvestPlot, queryFortuneWheel, applyFortuneWheel, type FarmData, type SeedsData } from '../game/api'
 
 // Map crop names to spritesheet row index (each row = 3 frames: tier1, tier2, tier3)
 // Frame = row * 3 + (stage - 1)
 const CROPS = ['carrot', 'tomato', 'corn', 'pumpkin', 'cabbage', 'radish', 'wheat', 'berry']
 const CROP_ROW: Record<string, number> = Object.fromEntries(CROPS.map((c, i) => [c, i]))
+
+// Crop growth time in seconds (total). Each phase = growthTime / 2
+const CROP_GROWTH_TIME: Record<string, number> = {
+  carrot: 2 * 3600,
+  tomato: 4 * 3600,
+  corn: 6 * 3600,
+  pumpkin: 12 * 3600,
+  cabbage: 16 * 3600,
+  radish: 24 * 3600,
+  wheat: 24 * 3600,
+  berry: 24 * 3600,
+}
+
+function getHalfGrowth(crop: string): number {
+  return (CROP_GROWTH_TIME[crop.toLowerCase()] ?? 7200) / 2
+}
+
+/**
+ * Calculate remaining seconds until growth phase completes.
+ * Server timestamps (plantedAt/wateredAt) are in UTC+0 epoch seconds.
+ * Date.now() returns UTC epoch ms.
+ *
+ * completionTime = serverTimestamp + halfGrowth
+ * remaining      = completionTime - nowUTC
+ */
+
+function getGrowthRemaining(serverTimestamp: number, crop: string): number {
+  const nowUTC = Math.floor(Date.now() / 1000)
+  const halfGrowth = getHalfGrowth(crop)
+  const completionTime = serverTimestamp + halfGrowth
+  const remaining = Math.max(0, completionTime - nowUTC)
+  console.log(`[Countdown] crop=${crop}, serverTs=${serverTimestamp}, nowUTC=${nowUTC}, halfGrowth=${halfGrowth}s(${halfGrowth/3600}h), completionTime=${completionTime}, remaining=${remaining}s(${(remaining/60).toFixed(1)}min)`)
+  return remaining
+}
 
 // Consistent seed scale for all stages
 const SEED_SCALE = 0.17
@@ -33,7 +67,7 @@ export class FarmScene extends Phaser.Scene {
     try {
       this.farmData = await fetchFarm()
     } catch {
-      this.farmData = { username: 'Player', coins: 5000, vipLevel: 1, pet: null, plots: Array.from({ length: 16 }, (_, i) => ({ id: i + 1, crop: null, stage: 0, locked: i >= 2 })) }
+      this.farmData = { username: 'Player', coins: 5000, vipLevel: 1, skin_id: 0, pet: null, plots: Array.from({ length: 16 }, (_, i) => ({ id: i + 1, crop: null, status: 0, plantedAt: null, wateredAt: null, locked: i >= 2 })) }
     }
     try {
       this.seedsData = await fetchSeeds()
@@ -422,17 +456,14 @@ export class FarmScene extends Phaser.Scene {
 
     // Find the soonest stage transition across all plots
     this.farmData.plots.forEach(plot => {
-      if (!plot.crop || plot.stage >= 3) return
+      if (!plot.crop || plot.status === 0) return
 
       let remaining = Infinity
-      if (plot.stage === 1 && plot.plantedAt) {
-        const elapsed = now - plot.plantedAt
-        remaining = 10 - elapsed
-      } else if (plot.stage === 2 && plot.wateredAt) {
-        const elapsed = now - plot.wateredAt
-        remaining = 15 - elapsed
+      if (plot.status === 1 && plot.plantedAt) {
+        remaining = getGrowthRemaining(plot.plantedAt, plot.crop)
+      } else if (plot.status === 2 && plot.wateredAt) {
+        remaining = getGrowthRemaining(plot.wateredAt, plot.crop)
       }
-      // stage 2 without wateredAt: paused, no schedule needed
 
       if (remaining > 0 && remaining < minRemaining) {
         minRemaining = remaining
@@ -467,15 +498,26 @@ export class FarmScene extends Phaser.Scene {
       }
 
       // Farm tile frame: 0=dry, 1=wet
-      if (plot.crop && (plot.stage === 1 || (plot.stage === 2 && plot.wateredAt))) {
-        plotSprite.setFrame(1) // wet: tier 1, or tier 2 after watering
+      if (plot.crop && plot.status === 1 && plot.plantedAt && getGrowthRemaining(plot.plantedAt, plot.crop) > 0) {
+        plotSprite.setFrame(1) // wet: planted and still growing
+      } else if (plot.crop && plot.status === 2 && plot.wateredAt) {
+        plotSprite.setFrame(1) // wet: watered
       } else {
-        plotSprite.setFrame(0) // dry: empty, tier 2 needs water, or tier 3
+        plotSprite.setFrame(0) // dry
       }
 
-      if (plot.crop && plot.stage > 0) {
-        const row = CROP_ROW[plot.crop] ?? 0
-        const frame = row * 3 + (plot.stage - 1)
+      if (plot.crop && plot.status >= 1) {
+        const row = CROP_ROW[plot.crop.toLowerCase()] ?? 0
+        let tier: number
+        if (plot.status === 1) {
+          tier = 0 // tier1: seedling
+        } else if (plot.status === 2 && plot.wateredAt) {
+          const remaining = getGrowthRemaining(plot.wateredAt, plot.crop)
+          tier = remaining <= 0 ? 2 : 1 // tier3 if harvestable, tier2 if growing
+        } else {
+          tier = 1
+        }
+        const frame = row * 3 + tier
         seed.setFrame(frame)
         seed.setScale(SEED_SCALE)
         seed.setVisible(true)
@@ -498,38 +540,44 @@ export class FarmScene extends Phaser.Scene {
   }
 
   private updateCountdowns() {
-    const now = Math.floor(Date.now() / 1000)
     this.farmData.plots.forEach((plot, i) => {
       if (i >= this.plotSprites.length) return
       const { timer } = this.plotSprites[i]
 
-      if (!plot.crop || plot.stage >= 3) {
+      if (!plot.crop || plot.status === 0) {
         timer.setVisible(false)
         return
       }
 
-      if (plot.stage === 1 && plot.plantedAt) {
-        // Countdown to tier 2
-        const remaining = Math.max(0, 10 - (now - plot.plantedAt))
-        if (remaining <= 0) { timer.setVisible(false); return }
-        const h = Math.floor(remaining / 3600)
-        const m = Math.floor((remaining % 3600) / 60)
-        const s = remaining % 60
-        timer.setText(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`)
-        timer.setVisible(true)
-      } else if (plot.stage === 2 && !plot.wateredAt) {
-        // Paused — needs water
-        timer.setText('\ud83d\udca7')
-        timer.setVisible(true)
-      } else if (plot.stage === 2 && plot.wateredAt) {
-        // Countdown to tier 3
-        const remaining = Math.max(0, 15 - (now - plot.wateredAt))
-        if (remaining <= 0) { timer.setVisible(false); return }
-        const h = Math.floor(remaining / 3600)
-        const m = Math.floor((remaining % 3600) / 60)
-        const s = remaining % 60
-        timer.setText(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`)
-        timer.setVisible(true)
+      if (plot.status === 1 && plot.plantedAt) {
+        // Status 1: planted, check if first-half growth time has elapsed
+        const remaining = getGrowthRemaining(plot.plantedAt, plot.crop)
+        if (remaining <= 0) {
+          // Growth done → show 💧 (ready for watering)
+          timer.setText('💧')
+          timer.setVisible(true)
+        } else {
+          // Still growing → show countdown
+          const h = Math.floor(remaining / 3600)
+          const m = Math.floor((remaining % 3600) / 60)
+          const s = remaining % 60
+          timer.setText(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`)
+          timer.setVisible(true)
+        }
+      } else if (plot.status === 2 && plot.wateredAt) {
+        // Status 2: watered, countdown second half
+        const remaining = getGrowthRemaining(plot.wateredAt, plot.crop)
+        if (remaining <= 0) {
+          // Growth done → harvestable
+          timer.setText('🌾')
+          timer.setVisible(true)
+        } else {
+          const h = Math.floor(remaining / 3600)
+          const m = Math.floor((remaining % 3600) / 60)
+          const s = remaining % 60
+          timer.setText(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`)
+          timer.setVisible(true)
+        }
       } else {
         timer.setVisible(false)
       }
@@ -544,10 +592,18 @@ export class FarmScene extends Phaser.Scene {
     let action: 'plant' | 'water' | 'harvest' | null = null
     if (!plot.crop) {
       action = 'plant'
-    } else if (plot.stage === 2 && !plot.wateredAt) {
-      action = 'water'
-    } else if (plot.stage >= 3) {
-      action = 'harvest'
+    } else if (plot.status === 1 && plot.plantedAt) {
+      // Only allow watering if first-half growth time has elapsed
+      const remaining = getGrowthRemaining(plot.plantedAt, plot.crop)
+      if (remaining <= 0) {
+        action = 'water'
+      }
+    } else if (plot.status === 2 && plot.wateredAt) {
+      // Only allow harvest if second-half growth time has elapsed
+      const remaining = getGrowthRemaining(plot.wateredAt, plot.crop)
+      if (remaining <= 0) {
+        action = 'harvest'
+      }
     }
 
     if (!action) return
@@ -555,6 +611,7 @@ export class FarmScene extends Phaser.Scene {
     // For harvest, capture sprite position before API call
     const plotIndex = this.farmData.plots.findIndex(p => p.id === plotId)
     let harvestX = 0, harvestY = 0
+    let harvestReward = 0
     if (action === 'harvest' && plotIndex >= 0 && plotIndex < this.plotSprites.length) {
       const { seed } = this.plotSprites[plotIndex]
       harvestX = seed.x
@@ -562,37 +619,62 @@ export class FarmScene extends Phaser.Scene {
     }
 
     try {
-      let data: FarmData
       switch (action) {
         case 'plant':
-          data = await plantCrop(plotId, this.selectedCrop)
+          await plantCrop(plotId, this.selectedCrop)
           break
         case 'water':
-          data = await waterPlot(plotId)
+          await waterPlot(plotId)
           break
-        case 'harvest':
-          data = await harvestPlot(plotId)
+        case 'harvest': {
+          const harvestData = await harvestPlot(plotId)
+          console.log('[Harvest] response harvest:', JSON.stringify(harvestData.harvest))
+          // Query fortune wheel with harvested crop name
+          let rewardAmount = 0
+          if (harvestData.harvest) {
+            for (const cropName of Object.keys(harvestData.harvest)) {
+              try {
+                const wheelId = await queryFortuneWheel(cropName)
+                if (wheelId) {
+                  console.log(`[FortuneWheel] got ID=${wheelId} for crop=${cropName}, applying...`)
+                  const amount = await applyFortuneWheel(wheelId)
+                  rewardAmount += amount
+                  console.log(`[FortuneWheel] reward amount: ${amount}`)
+                } else {
+                  console.warn(`[FortuneWheel] no wheel ID found for crop=${cropName}`)
+                }
+              } catch (e) {
+                console.error(`[FortuneWheel] failed for ${cropName}:`, e)
+              }
+            }
+          }
+          harvestReward = rewardAmount
           break
+        }
       }
-      this.farmData = data
+
+      // Re-fetch full farm state to ensure consistency
+      this.farmData = await fetchFarm()
 
       if (action === 'plant') {
         this.seedsData = await fetchSeeds()
       }
 
       if (action === 'harvest') {
-        this.playHarvestAnimation(harvestX, harvestY)
+        this.playHarvestAnimation(harvestX, harvestY, harvestReward)
       }
 
       this.renderPlots()
       this.scheduleNextRefresh()
       window.dispatchEvent(new CustomEvent('farm-updated'))
     } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
       console.error(`Action ${action} failed on plot ${plotId}:`, err)
+      this.showToast(msg)
     }
   }
 
-  private playHarvestAnimation(x: number, y: number) {
+  private playHarvestAnimation(x: number, y: number, reward: number = 0) {
     // ① Bounce particles — small circles burst outward
     for (let i = 0; i < 6; i++) {
       const angle = (Math.PI * 2 * i) / 6
@@ -631,8 +713,9 @@ export class FarmScene extends Phaser.Scene {
       })
     }
 
-    // ③ "+100" flies to HUD
-    const flyText = this.add.text(x, y - 5, '+100', {
+    // ③ Reward amount flies to HUD
+    const rewardText = reward > 0 ? `+${reward}` : '+0'
+    const flyText = this.add.text(x, y - 5, rewardText, {
       fontSize: '18px',
       fontFamily: 'Arial, sans-serif',
       fontStyle: 'bold',
@@ -674,7 +757,7 @@ export class FarmScene extends Phaser.Scene {
       const isLocked = cropIndex >= unlocked
       sprite.setData('locked', isLocked)
       const crop = CROPS[cropIndex]
-      const count = this.seedsData[`seed_${crop}`] ?? 0
+      const count = this.seedsData[String(cropIndex + 1)] ?? 0
       countText.setText(`${count}`)
       if (isLocked) {
         sprite.setTint(0x555555)
@@ -696,5 +779,53 @@ export class FarmScene extends Phaser.Scene {
         highlight.setVisible(cropIndex === 0)
       })
     }
+  }
+
+  private showToast(message: string) {
+    const cx = this.scale.width / 2
+    const cy = this.scale.height / 2
+
+    const bg = this.add.graphics()
+    bg.setDepth(100).setScrollFactor(0).setAlpha(0)
+
+    const txt = this.add.text(cx, cy, message, {
+      fontSize: '14px',
+      fontFamily: 'Arial, sans-serif',
+      color: '#FFFFFF',
+      align: 'center',
+      wordWrap: { width: 260 },
+    }).setOrigin(0.5).setDepth(101).setScrollFactor(0).setAlpha(0)
+
+    const bounds = txt.getBounds()
+    const padX = 16
+    const padY = 10
+    bg.fillStyle(0x000000, 0.75)
+    bg.fillRoundedRect(
+      bounds.x - padX,
+      bounds.y - padY,
+      bounds.width + padX * 2,
+      bounds.height + padY * 2,
+      8
+    )
+
+    this.tweens.add({
+      targets: [bg, txt],
+      alpha: 1,
+      duration: 200,
+      ease: 'Quad.easeOut',
+    })
+
+    this.time.delayedCall(2500, () => {
+      this.tweens.add({
+        targets: [bg, txt],
+        alpha: 0,
+        duration: 300,
+        ease: 'Quad.easeIn',
+        onComplete: () => {
+          bg.destroy()
+          txt.destroy()
+        },
+      })
+    })
   }
 }

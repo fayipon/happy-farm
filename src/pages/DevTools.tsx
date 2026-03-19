@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { fetchFarm, plantCrop, waterPlot, harvestPlot, clearAll, setVip, type FarmData } from '../game/api'
+import { fetchFarm, plantCrop, waterPlot, harvestPlot, clearAll, setVip, getApiSettings, setApiSettings, type FarmData } from '../game/api'
 import './DevTools.css'
 
 const CROPS = ['carrot', 'tomato', 'corn', 'pumpkin', 'cabbage', 'radish', 'wheat', 'berry']
@@ -10,6 +10,10 @@ export default function DevTools() {
   const [log, setLog] = useState<string[]>([])
   const [selectedCrop, setSelectedCrop] = useState('carrot')
   const [plotId, setPlotId] = useState(1)
+  const [apiDomain, setApiDomain] = useState(() => getApiSettings().domain)
+  const [authHeader, setAuthHeader] = useState(() => getApiSettings().auth)
+  const [originHeader, setOriginHeader] = useState(() => getApiSettings().origin)
+  const [xHostHeader, setXHostHeader] = useState(() => getApiSettings().xHost)
 
   const addLog = useCallback((msg: string) => {
     setLog(prev => [`[${new Date().toLocaleTimeString()}] ${msg}`, ...prev].slice(0, 50))
@@ -97,6 +101,63 @@ export default function DevTools() {
         <span>🛠 Dev Tools</span>
         <button onClick={() => setOpen(false)}>✕</button>
       </div>
+
+      {/* API Settings */}
+      <section>
+        <h3>API Settings</h3>
+        <div className="devtools-row">
+          <label>Domain</label>
+          <input
+            type="text"
+            placeholder="e.g. https://api.example.com"
+            value={apiDomain}
+            onChange={e => {
+              setApiDomain(e.target.value)
+              setApiSettings({ domain: e.target.value, auth: authHeader, origin: originHeader, xHost: xHostHeader })
+              addLog(`API domain → ${e.target.value || '(default)'}`)
+            }}
+          />
+        </div>
+        <div className="devtools-row">
+          <label>Auth</label>
+          <input
+            type="text"
+            placeholder="Authorization header"
+            value={authHeader}
+            onChange={e => {
+              setAuthHeader(e.target.value)
+              setApiSettings({ domain: apiDomain, auth: e.target.value, origin: originHeader, xHost: xHostHeader })
+              addLog(`Auth header updated`)
+            }}
+          />
+        </div>
+        <div className="devtools-row">
+          <label>Origin</label>
+          <input
+            type="text"
+            placeholder="Origin header"
+            value={originHeader}
+            onChange={e => {
+              setOriginHeader(e.target.value)
+              setApiSettings({ domain: apiDomain, auth: authHeader, origin: e.target.value, xHost: xHostHeader })
+              addLog(`Origin header → ${e.target.value || '(empty)'}`)
+            }}
+          />
+        </div>
+        <div className="devtools-row">
+          <label>X-Host</label>
+          <input
+            type="text"
+            placeholder="X-Host header"
+            value={xHostHeader}
+            onChange={e => {
+              setXHostHeader(e.target.value)
+              setApiSettings({ domain: apiDomain, auth: authHeader, origin: originHeader, xHost: e.target.value })
+              addLog(`X-Host header → ${e.target.value || '(empty)'}`)
+            }}
+          />
+        </div>
+      </section>
 
       {/* State */}
       <section>
@@ -189,13 +250,13 @@ export default function DevTools() {
           {farm?.plots.map(p => (
             <div
               key={p.id}
-              className={`devtools-plot stage-${p.stage}`}
+              className={`devtools-plot stage-${p.status}`}
               onClick={() => setPlotId(p.id)}
-              title={`#${p.id} ${p.crop ?? 'empty'} stage:${p.stage}`}
+              title={`#${p.id} ${p.crop ?? 'empty'} status:${p.status}`}
             >
               <span className="plot-id">{p.id}</span>
               {p.crop && <span className="plot-crop">{p.crop.slice(0, 3)}</span>}
-              <span className="plot-stage">{'●'.repeat(p.stage)}</span>
+              <span className="plot-stage">{'●'.repeat(p.status)}</span>
             </div>
           ))}
         </div>

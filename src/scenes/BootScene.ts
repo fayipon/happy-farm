@@ -4,14 +4,14 @@ import farmImg from '../assets/items/farm.png'
 import sunImg from '../assets/items/sun.png'
 import cloudImg from '../assets/items/cloud.png'
 import goldImg from '../assets/ui/gold.png'
+import avatarImg from '../assets/ui/avatar.png'
 import uiImg from '../assets/ui/ui.png'
-import avatarBarImg from '../assets/ui/avatar.png'
-import ruleImg from '../assets/ui/rule.png'
-import ruleDetailImg from '../assets/ui/rule_detail.png'
 import seedImg from '../assets/crops/seed2.jpg'
 import femaleImg from '../assets/characters/female.jpg'
 import maleImg from '../assets/characters/male.jpg'
 import petImg from '../assets/characters/pet.jpg'
+import ruleIconImg from '../assets/ui/rule.png'
+import ruleDetailImg from '../assets/ui/rule_detail.png'
 
 const SEED_FW = 512  // 1536 / 3
 const SEED_FH = 344  // 2752 / 8
@@ -40,9 +40,7 @@ export class BootScene extends Phaser.Scene {
       frameHeight: 111,
     })
     this.load.image('gold', goldImg)
-    this.load.image('avatar-bar', avatarBarImg)
-    this.load.image('rule-icon', ruleImg)
-    this.load.image('rule-detail', ruleDetailImg)
+    this.load.image('avatar-bar', avatarImg)
     this.load.spritesheet('ui', uiImg, {
       frameWidth: 166,
       frameHeight: 166,
@@ -51,6 +49,8 @@ export class BootScene extends Phaser.Scene {
     this.load.image('female-raw', femaleImg)
     this.load.image('male-raw', maleImg)
     this.load.image('pet-raw', petImg)
+    this.load.image('rule-icon', ruleIconImg)
+    this.load.image('rule-detail', ruleDetailImg)
   }
 
   create() {
