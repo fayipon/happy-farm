@@ -36,7 +36,6 @@ function getGrowthRemaining(serverTimestamp: number, crop: string): number {
   const halfGrowth = getHalfGrowth(crop)
   const completionTime = serverTimestamp + halfGrowth
   const remaining = Math.max(0, completionTime - nowUTC)
-  console.log(`[Countdown] crop=${crop}, serverTs=${serverTimestamp}, nowUTC=${nowUTC}, halfGrowth=${halfGrowth}s(${halfGrowth/3600}h), completionTime=${completionTime}, remaining=${remaining}s(${(remaining/60).toFixed(1)}min)`)
   return remaining
 }
 
@@ -441,7 +440,7 @@ export class FarmScene extends Phaser.Scene {
   }
 
   private formatCoins(n: number): string {
-    return n.toLocaleString()
+    return Math.floor(n).toLocaleString()
   }
 
   private scheduleNextRefresh() {
@@ -628,7 +627,6 @@ export class FarmScene extends Phaser.Scene {
           break
         case 'harvest': {
           const harvestData = await harvestPlot(plotId)
-          console.log('[Harvest] response harvest:', JSON.stringify(harvestData.harvest))
           // Query fortune wheel with harvested crop name
           let rewardAmount = 0
           if (harvestData.harvest) {
@@ -636,15 +634,11 @@ export class FarmScene extends Phaser.Scene {
               try {
                 const wheelId = await queryFortuneWheel(cropName)
                 if (wheelId) {
-                  console.log(`[FortuneWheel] got ID=${wheelId} for crop=${cropName}, applying...`)
                   const amount = await applyFortuneWheel(wheelId)
                   rewardAmount += amount
-                  console.log(`[FortuneWheel] reward amount: ${amount}`)
-                } else {
-                  console.warn(`[FortuneWheel] no wheel ID found for crop=${cropName}`)
                 }
-              } catch (e) {
-                console.error(`[FortuneWheel] failed for ${cropName}:`, e)
+              } catch {
+                // ignore fortune wheel errors
               }
             }
           }
@@ -669,7 +663,6 @@ export class FarmScene extends Phaser.Scene {
       window.dispatchEvent(new CustomEvent('farm-updated'))
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      console.error(`Action ${action} failed on plot ${plotId}:`, err)
       this.showToast(msg)
     }
   }

@@ -83,7 +83,6 @@ export async function fetchFarm(): Promise<FarmData> {
   const res = await fetch(getApiBase(), { headers: getCustomHeaders() })
   if (!res.ok) throw new Error(`GET /api/farm failed: ${res.status}`)
   const json: ApiResponse<FarmData> = await res.json()
-  console.log('[API] fetchFarm response:', JSON.stringify(json, null, 2))
   return unwrapResponse(json)
 }
 
@@ -121,7 +120,6 @@ export async function harvestPlot(plotId: number): Promise<HarvestData> {
   })
   if (!res.ok) throw new Error(`POST /api/farm/harvest failed: ${res.status}`)
   const json: ApiResponse<HarvestData> = await res.json()
-  console.log('[API] harvestPlot raw response:', JSON.stringify(json, null, 2))
   return unwrapResponse(json)
 }
 
@@ -174,7 +172,6 @@ export async function queryFortuneWheel(cropName: string): Promise<number | null
   })
   if (!res.ok) throw new Error(`GET /api/fortune-wheels failed: ${res.status}`)
   const json = await res.json()
-  console.log('[FortuneWheel] query response:', JSON.stringify(json, null, 2))
   // Extract ID from response: data.data[0].id
   const items = json?.data?.data
   if (Array.isArray(items) && items.length > 0 && items[0].id) {
@@ -193,7 +190,6 @@ export async function applyFortuneWheel(wheelId: number): Promise<number> {
   })
   if (!res.ok) throw new Error(`POST /api/fortune-wheel/${wheelId}/apply-batch failed: ${res.status}`)
   const json = await res.json()
-  console.log('[FortuneWheel] apply-batch response:', JSON.stringify(json, null, 2))
   // Extract reward amount from sum[0].amount
   const sum = json?.data?.sum
   if (Array.isArray(sum) && sum.length > 0 && typeof sum[0].amount === 'number') {
