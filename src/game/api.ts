@@ -23,16 +23,16 @@ interface ApiResponse<T> {
 }
 
 const API_ERROR_CODES: Record<number, string> = {
-  3057: '田地已鎖定',
-  3058: '田地不是空的',
-  3059: '作物尚未成熟',
-  3060: '未達澆水存款門檻',
-  3061: '未達澆水投注門檻',
-  3062: '餘額不足',
-  3063: '作物尚未解鎖',
-  3064: '田地是空的',
-  3065: '作物不需要澆水',
-  3066: '作物已經澆過水了',
+  3057: 'Plot is locked',
+  3058: 'Plot is not empty',
+  3059: 'Crop is not yet mature',
+  3060: 'Watering deposit threshold not met',
+  3061: 'Watering bet threshold not met',
+  3062: 'Insufficient balance',
+  3063: 'Crop not yet unlocked',
+  3064: 'Plot is empty',
+  3065: 'Crop does not need watering',
+  3066: 'Crop has already been watered',
 }
 
 function unwrapResponse<T>(json: ApiResponse<T>): T {
