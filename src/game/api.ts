@@ -140,9 +140,13 @@ export type SeedsData = Record<string, number>
 export async function fetchSeeds(): Promise<SeedsData> {
   const res = await fetch(`${getApiBase()}/seeds`, { headers: getCustomHeaders() })
   if (!res.ok) throw new Error(`GET /api/farm/seeds failed: ${res.status}`)
-  const json: ApiResponse<{ seeds: SeedsData }> = await res.json()
+  const json: ApiResponse<SeedsData | { seeds: SeedsData }> = await res.json()
   const data = unwrapResponse(json)
-  return data.seeds
+  // Handle both formats: { seeds: {...} } or directly { seed_carrot: ... }
+  if (data && typeof data === 'object' && 'seeds' in data && typeof (data as { seeds: SeedsData }).seeds === 'object') {
+    return (data as { seeds: SeedsData }).seeds
+  }
+  return data as SeedsData
 }
 
 export async function setVip(level: number): Promise<FarmData> {

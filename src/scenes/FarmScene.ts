@@ -757,7 +757,8 @@ export class FarmScene extends Phaser.Scene {
       const isLocked = cropIndex >= unlocked
       sprite.setData('locked', isLocked)
       const crop = CROPS[cropIndex]
-      const count = this.seedsData[String(cropIndex + 1)] ?? 0
+      const key = `SEED_${crop.toUpperCase()}`
+      const count = this.seedsData[key] ?? 0
       countText.setText(`${count}`)
       if (isLocked) {
         sprite.setTint(0x555555)
