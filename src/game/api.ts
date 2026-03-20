@@ -28,7 +28,7 @@ const API_ERROR_CODES: Record<number, string> = {
   3059: 'Crop is not yet mature',
   3060: 'Watering deposit threshold not met',
   3061: 'Watering bet threshold not met',
-  3062: 'Insufficient balance',
+  3062: 'You need seeds to plant',
   3063: 'Crop not yet unlocked',
   3064: 'Plot is empty',
   3065: 'Crop does not need watering',
